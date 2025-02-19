@@ -11,8 +11,10 @@
         <div class="game-stats">
             <div class="score">Score: <span id="scoreDisplay">0</span></div>
             <div class="level">Level: <span id="levelDisplay">1</span></div>
+            <div class="snake-length">Length: <span id="lengthDisplay">1</span></div>
             <div class="high-score">High Score: <span id="highScoreDisplay">0</span></div>
         </div>
+        <div class="next-level">Next Level at Length: <span id="nextLevelDisplay">10</span></div>
         <canvas id="gameCanvas" width="500" height="500"></canvas>
         <div class="game-controls">
             <button id="pauseButton">Pause</button>
@@ -22,6 +24,8 @@
             <div class="modal-content">
                 <h2>Game Over!</h2>
                 <p>Your Score: <span id="finalScoreDisplay"></span></p>
+                <p>Snake Length: <span id="finalLengthDisplay"></span></p>
+                <p>Level Reached: <span id="finalLevelDisplay"></span></p>
                 <button id="playAgainButton">Play Again</button>
             </div>
         </div>

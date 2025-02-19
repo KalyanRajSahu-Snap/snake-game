@@ -3,11 +3,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const ctx = canvas.getContext('2d');
     const scoreDisplay = document.getElementById('scoreDisplay');
     const levelDisplay = document.getElementById('levelDisplay');
+    const lengthDisplay = document.getElementById('lengthDisplay');
+    const nextLevelDisplay = document.getElementById('nextLevelDisplay');
     const highScoreDisplay = document.getElementById('highScoreDisplay');
     const pauseButton = document.getElementById('pauseButton');
     const restartButton = document.getElementById('restartButton');
     const gameOverModal = document.getElementById('gameOverModal');
     const finalScoreDisplay = document.getElementById('finalScoreDisplay');
+    const finalLengthDisplay = document.getElementById('finalLengthDisplay');
+    const finalLevelDisplay = document.getElementById('finalLevelDisplay');
     const playAgainButton = document.getElementById('playAgainButton');
 
     // Game settings
@@ -24,8 +28,50 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameLoop;
     let isPaused = false;
     let highScore = localStorage.getItem('snakeHighScore') || 0;
-
+    
+    // Level thresholds based on snake length
+    const levelThresholds = [0, 10, 20, 50, 100];
+    
     highScoreDisplay.textContent = highScore;
+    lengthDisplay.textContent = snake.length;
+    updateNextLevelInfo();
+
+    function updateNextLevelInfo() {
+        const currentLength = snake.length;
+        let nextThreshold;
+        
+        if (level < levelThresholds.length - 1) {
+            nextThreshold = levelThresholds[level + 1];
+            nextLevelDisplay.textContent = nextThreshold;
+        } else {
+            nextLevelDisplay.textContent = "Max Level";
+        }
+    }
+
+    function checkLevelProgression() {
+        const currentLength = snake.length;
+        let newLevel = 1;
+        
+        for (let i = 1; i < levelThresholds.length; i++) {
+            if (currentLength >= levelThresholds[i]) {
+                newLevel = i + 1;
+            } else {
+                break;
+            }
+        }
+        
+        if (newLevel !== level) {
+            level = newLevel;
+            levelDisplay.textContent = level;
+            gameSpeed = Math.max(50, 200 - (level - 1) * 30);
+            clearInterval(gameLoop);
+            gameLoop = setInterval(gameStep, gameSpeed);
+            generateObstacles();
+            return true;
+        }
+        
+        return false;
+    }
 
     function generateFood() {
         let newFood;
@@ -43,19 +89,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function generateObstacles() {
         obstacles = [];
-        const obstacleCount = level * 2;
+        // Increase obstacles based on level - more obstacles at higher levels
+        const obstacleCount = level * 3;
         for (let i = 0; i < obstacleCount; i++) {
             let newObstacle;
+            let attempts = 0;
             do {
                 newObstacle = {
                     x: Math.floor(Math.random() * tileCount),
                     y: Math.floor(Math.random() * tileCount)
                 };
+                attempts++;
+                // Prevent infinite loop if board gets too crowded
+                if (attempts > 100) break;
             } while (
                 snake.some(segment => segment.x === newObstacle.x && segment.y === newObstacle.y) ||
-                obstacles.some(obs => obs.x === newObstacle.x && obs.y === newObstacle.y)
+                (food && food.x === newObstacle.x && food.y === newObstacle.y) ||
+                obstacles.some(obs => obs.x === newObstacle.x && obs.y === newObstacle.y) ||
+                // Keep some space around the snake head to avoid immediate collisions
+                (Math.abs(newObstacle.x - snake[0].x) < 3 && Math.abs(newObstacle.y - snake[0].y) < 3)
             );
-            obstacles.push(newObstacle);
+            
+            if (attempts <= 100) {
+                obstacles.push(newObstacle);
+            }
         }
     }
 
@@ -63,6 +120,23 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear canvas
         ctx.fillStyle = '#ECF0F1';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw grid lines (optional)
+        ctx.strokeStyle = '#BDC3C7';
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i < tileCount; i++) {
+            // Vertical lines
+            ctx.beginPath();
+            ctx.moveTo(i * gridSize, 0);
+            ctx.lineTo(i * gridSize, canvas.height);
+            ctx.stroke();
+            
+            // Horizontal lines
+            ctx.beginPath();
+            ctx.moveTo(0, i * gridSize);
+            ctx.lineTo(canvas.width, i * gridSize);
+            ctx.stroke();
+        }
 
         // Draw obstacles
         ctx.fillStyle = '#34495E';
@@ -75,9 +149,17 @@ document.addEventListener('DOMContentLoaded', () => {
             );
         });
 
-        // Draw snake
-        ctx.fillStyle = level % 2 === 0 ? '#3498DB' : '#2ECC71';
+        // Draw snake with gradient colors based on position
         snake.forEach((segment, index) => {
+            // Head is different color
+            if (index === 0) {
+                ctx.fillStyle = '#E67E22';
+            } else {
+                // Body color based on level
+                const snakeColors = ['#2ECC71', '#3498DB', '#9B59B6', '#F1C40F', '#E74C3C'];
+                ctx.fillStyle = snakeColors[(level - 1) % snakeColors.length];
+            }
+            
             ctx.fillRect(
                 segment.x * gridSize, 
                 segment.y * gridSize, 
@@ -86,13 +168,14 @@ document.addEventListener('DOMContentLoaded', () => {
             );
         });
 
-        // Draw food
+        // Draw food with pulsing effect
+        const pulseSize = Math.sin(Date.now() / 200) * 2;
         ctx.fillStyle = '#E74C3C';
         ctx.fillRect(
-            food.x * gridSize, 
-            food.y * gridSize, 
-            gridSize - 2, 
-            gridSize - 2
+            food.x * gridSize - pulseSize/2, 
+            food.y * gridSize - pulseSize/2, 
+            gridSize - 2 + pulseSize, 
+            gridSize - 2 + pulseSize
         );
     }
 
@@ -104,18 +187,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (head.x === food.x && head.y === food.y) {
             score += level;
             scoreDisplay.textContent = score;
-
-            // Level up logic
-            if (score % 50 === 0) {
-                level++;
-                levelDisplay.textContent = level;
-                gameSpeed = Math.max(50, gameSpeed - 20);
-                clearInterval(gameLoop);
-                gameLoop = setInterval(gameStep, gameSpeed);
-                generateObstacles();
-            }
-
             food = generateFood();
+            
+            // Update length display
+            lengthDisplay.textContent = snake.length;
+            
+            // Check if we need to level up
+            const leveledUp = checkLevelProgression();
+            if (leveledUp) {
+                updateNextLevelInfo();
+            }
         } else {
             snake.pop();
         }
@@ -158,6 +239,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         finalScoreDisplay.textContent = score;
+        finalLengthDisplay.textContent = snake.length;
+        finalLevelDisplay.textContent = level;
         gameOverModal.style.display = 'flex';
     }
 
@@ -170,10 +253,12 @@ document.addEventListener('DOMContentLoaded', () => {
         gameSpeed = 200;
         scoreDisplay.textContent = score;
         levelDisplay.textContent = level;
+        lengthDisplay.textContent = snake.length;
         gameOverModal.style.display = 'none';
         
         food = generateFood();
         generateObstacles();
+        updateNextLevelInfo();
         
         clearInterval(gameLoop);
         gameLoop = setInterval(gameStep, gameSpeed);
@@ -194,6 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'ArrowDown':  if (dy !== -1) { dx = 0; dy = 1;  } break;
             case 'ArrowLeft':  if (dx !== 1)  { dx = -1; dy = 0; } break;
             case 'ArrowRight': if (dx !== -1) { dx = 1; dy = 0;  } break;
+            case ' ': // Spacebar for pause
+                isPaused = !isPaused;
+                pauseButton.textContent = isPaused ? 'Resume' : 'Pause';
+                break;
         }
     });
 
